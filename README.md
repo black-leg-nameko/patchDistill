@@ -81,11 +81,11 @@ This IDE session cannot directly become a Colab GPU runtime by itself. The
 practical workflow is to run the same repository code inside Colab, usually by
 one of these routes:
 
-- push/sync this folder to GitHub and clone it in Colab;
+- clone the public GitHub repository in Colab:
+  `git clone https://github.com/black-leg-nameko/patchDistill.git /content/patchDistill`;
 - upload this folder to Google Drive and mount Drive in Colab;
 - expose the Colab machine through SSH or a VS Code-compatible tunnel, if your
   Colab setup allows that.
 
 The code here is CLI-first so that local and Colab commands stay nearly
 identical.
-

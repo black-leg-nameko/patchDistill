@@ -20,7 +20,7 @@ Use one of these routes first.
 Push this folder to GitHub, then run in Colab:
 
 ```bash
-!git clone <YOUR_REPO_URL> /content/patchDistill
+!git clone https://github.com/black-leg-nameko/patchDistill.git /content/patchDistill
 %cd /content/patchDistill
 !python -m pip install -r requirements.txt
 ```
@@ -45,4 +45,3 @@ After setup, this should show project files:
 
 Expected files include `requirements.txt`, `patchdistill/`, `scripts/`, and
 `notebooks/`.
-
