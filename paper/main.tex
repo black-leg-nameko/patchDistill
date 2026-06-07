@@ -27,7 +27,8 @@
 本稿では，直接的プロンプトインジェクションを「system instruction 由来の制御信号」から「user-side injected instruction 由来の制御信号」への内部制御シフトとして捉え，activation patching により得られる patch-effect profile を Causal Patch Signature として定義する．
 さらに，高コストな activation patching を推論時に実行するのではなく，offline の教師信号生成に限定し，1 回の forward pass で取得可能な hidden state，attention 統計，logit 統計から patch signature を近似する proxy model へ蒸留する PatchDistill を提案する．
 初期実装では，合成 direct prompt injection データに対して，TF-IDF，ルール特徴，疑似 patch signature を用いた surrogate PatchDistill の比較を行い，実験パイプラインの妥当性を確認した．
-今後，Colab A100 上で Hugging Face モデルを用いた residual stream patching を実行し，真の Causal Patch Signature に基づく proxy error と検出性能を評価する．
+さらに，Colab A100 上で GPT-2 による residual stream patching pilot を実行し，真の patch-effect target に対する proxy error と検出性能を測定した．
+現時点の合成データでは，contrastive profile を含めても one-pass hidden features のみで完全分類できており，PatchDistill の優位性ではなく，より厳密なデータ設計と held-out framing 評価の必要性を示す結果となった．
 \end{abstract}
 
 \section{はじめに}
@@ -49,7 +50,7 @@ LLM アプリケーションでは，システムプロンプト，開発者指�
   \item 直接的プロンプトインジェクション検出のための Causal Patch Signature を定義する．
   \item offline activation patching による高コストな因果信号を，one-pass 内部特徴から近似する Patch Signature Distillation を提案する．
   \item hidden state probe や attention 統計のみの分類と比較可能な実験パイプラインを実装する．
-  \item 初期合成データにより，データ生成，特徴抽出，proxy 学習，検出器評価，結果収集までの実験基盤を検証する．
+  \item 初期合成データと GPT-2 pilot により，データ生成，特徴抽出，residual patching，proxy 学習，検出器評価，結果収集までの実験基盤を検証する．
 \end{itemize}
 
 \section{関連研究}
@@ -186,10 +187,11 @@ Stress & Surrogate PatchDistill & 1.000 & 1.000 & 0.000 & 0.000 \\
 ただし，これは疑似教師信号に対する結果であり，真の activation patching に基づく $\mathrm{PE}(x)$ の近似可能性を示すものではない．
 
 Colab A100 上で GPT-2 を用いた初期 pilot も実行した．
-Stress profile の 160 例から one-pass feature を抽出し，positive 24 例に対して residual stream patching を行った．
-このとき proxy model の patch-effect prediction error は MAE $=0.0277$，MSE $=0.00407$ であった．
+各 profile について 160 例から one-pass feature を抽出し，positive 24 例に対して residual stream patching を行った．
+表~\ref{tab:gpt2-pilots} に，真の patch-effect target に対する proxy error と検出性能を示す．
+Stress profile では proxy model の patch-effect prediction error は MAE $=0.0277$，MSE $=0.00407$ であった．
 HF feature のみの Logistic Regression と，distilled patch feature を加えた Logistic Regression は，どちらも F1 $=1.0$，AUROC $=1.0$ となった．
-この結果も優位性の証拠ではなく，むしろ現行 synthetic data が GPT-2 の one-pass 統計だけで分離できるほど容易であることを示す．
+この結果は優位性の証拠ではなく，むしろ現行 synthetic data が GPT-2 の one-pass 統計だけで分離できるほど容易であることを示す．
 
 さらに，positive と negative の両方に同一の疑わしい span を含める matched profile を追加した．
 Matched profile の local surrogate 実験では，ルール特徴の F1 は $0.722$，AUROC は $0.787$ まで低下した．
@@ -201,6 +203,24 @@ Proxy error は MAE $=0.0528$，MSE $=0.01265$ であり，HF feature のみの�
 さらに，境界語彙を両クラスで共有し，否定と語順のみを反転させる contrastive profile を追加した．
 Local surrogate 実験では，ルール特徴の AUROC は $0.5$ まで低下したが，TF-IDF は依然として F1 $=1.0$，AUROC $=1.0$ であった．
 これは，現在の TF-IDF baseline が bigram の語順ショートカットを利用している可能性を示す．
+Contrastive profile の GPT-2 pilot では，proxy error は MAE $=0.0902$，MSE $=0.03227$ まで増加した．
+これは contrastive framing が patch-effect target の近似を難しくしている可能性を示す一方，features-only detector と distilled detector はどちらも依然として F1 $=1.0$，AUROC $=1.0$ であった．
+したがって，contrastive profile はルール特徴の破綻と proxy target の難化を観測するには有用であるが，検出器比較としてはまだ不十分である．
+
+\begin{table}[t]
+\centering
+\caption{Colab A100 上の GPT-2 residual patching pilot．各 profile で 160 例の one-pass feature を抽出し，24 例に residual stream patching を行った．}
+\label{tab:gpt2-pilots}
+\begin{tabular}{lrrrrrr}
+\toprule
+Profile & MAE & MSE & Feat. F1 & Feat. AUROC & Distill F1 & Distill AUROC \\
+\midrule
+Stress & 0.0277 & 0.00407 & 1.000 & 1.000 & 1.000 & 1.000 \\
+Matched & 0.0528 & 0.01265 & 1.000 & 1.000 & 1.000 & 1.000 \\
+Contrastive & 0.0902 & 0.03227 & 1.000 & 1.000 & 1.000 & 1.000 \\
+\bottomrule
+\end{tabular}
+\end{table}
 
 \section{考察}
 初期結果から分かることは，現時点の synthetic データでは表層的手がかりや長さ・span 有無などの副次的手がかりが強く，検出器比較としては不十分であるという点である．
@@ -209,15 +229,15 @@ Local surrogate 実験では，ルール特徴の AUROC は $0.5$ まで低下�
   \item benign hard prompt を増やし，引用，教育，コード，法務文書に含まれる命令表現をより多様化する．
   \item attack template を train/test で明確に分離し，言い換え，多言語，長文化，adaptive attack を追加する．
   \item clean/injected の長さ，危険語数，引用符，malicious span 有無に基づくショートカットを抑制する．
-  \item HF モデルで真の patch signature を生成し，proxy error と detector 性能をより難しい split で評価する．
+  \item HF モデルで生成した真の patch signature を，より難しい split と held-out framing で再評価する．
   \item hidden-state-only probe，attention-stat-only detector，PatchDistill without proxy，PatchDistill full の ablation を行う．
 \end{enumerate}
 
-Colab A100 pilot では，まず GPT-2 または Qwen2.5-0.5B-Instruct を用い，代表層に限定して residual stream patching を行う．
-その後，Qwen2.5-1.5B，Gemma-2-2B へ拡張し，最終的に 7B 級 instruction-tuned model で主評価を行う．
+次の Colab A100 実験では，GPT-2 で確認した pipeline を Qwen2.5-0.5B-Instruct に拡張し，さらに Qwen2.5-1.5B，Gemma-2-2B，7B 級 instruction-tuned model へ段階的に拡張する．
+同時に，paraphrased contrastive frames と held-out frame family split を追加し，features-only detector が使う template-order shortcut を抑制する．
 
 \section{限界}
-本稿の現時点の結果は，合成データと疑似 patch signature に基づく予備実験である．
+本稿の現時点の結果は，合成データと小規模な GPT-2 residual patching pilot に基づく予備実験である．
 したがって，PatchDistill が実際の direct PI や indirect PI に対して汎化すること，あるいは hidden-state probe より優れることはまだ示していない．
 また，現在の patching 実装は residual block output 単位であり，attention head 単位や MLP activation 単位の詳細な causal localization には拡張が必要である．
 さらに，safe/attack continuation の選択により patch effect が変化し得るため，複数 metric による頑健性評価が必要である．
@@ -225,7 +245,7 @@ Colab A100 pilot では，まず GPT-2 または Qwen2.5-0.5B-Instruct を用い
 \section{おわりに}
 本稿では，直接的プロンプトインジェクションを内部制御シフトとして捉え，activation patching により得られる Causal Patch Signature を one-pass 検出器へ蒸留する PatchDistill を提案した．
 初期実装では，合成データ生成，one-pass surrogate 特徴，疑似 patch signature，proxy 学習，検出器評価，HF feature extraction，residual patching，結果収集までの実験基盤を構築した．
-今後は Colab A100 上で真の patch signature を収集し，proxy prediction error，OOD robustness，benign hard false positive rate，LLM judge call rate を評価する．
+今後は，より大きな instruction-tuned model と held-out framing split で真の patch signature を追加収集し，proxy prediction error，OOD robustness，benign hard false positive rate，LLM judge call rate を評価する．
 
 \bibliographystyle{plain}
 \bibliography{references}

@@ -135,3 +135,51 @@ Interpretation:
   captures the synthetic contrast.
 - Next step: run GPT-2/Qwen HF features on `contrastive`, then add
   paraphrased contrastive frames so template bigrams do not dominate.
+
+## 2026-06-08 Colab A100 GPT-2 Contrastive Pilot
+
+Environment visible in the saved notebook output:
+
+- GPU: NVIDIA A100-SXM4-80GB
+- Model: `gpt2`
+- Data profile: `contrastive`
+- Synthetic examples: 320
+- HF feature examples: 160
+- Residual patch examples: 24
+- Layers: `0,6,11`
+- Run name: `gpt2_a100_contrastive_001`
+
+Surrogate contrastive split:
+
+| Method | F1 | AUROC | FNR | FPR |
+| --- | ---: | ---: | ---: | ---: |
+| TF-IDF + Logistic Regression | 1.0000 | 1.0000 | 0.0000 | 0.0000 |
+| Rule features + Logistic Regression | 0.6667 | 0.5000 | 0.0000 | 1.0000 |
+| Surrogate PatchDistill | 0.6667 | 0.5000 | 0.0000 | 1.0000 |
+
+GPT-2 one-pass / patching pilot:
+
+| Component | Result |
+| --- | ---: |
+| `hf-extract` examples | 160 |
+| `hf-patch` examples | 24 |
+| Proxy MAE | 0.0902 |
+| Proxy MSE | 0.03227 |
+| HF features-only detector F1 | 1.0000 |
+| HF features-only detector AUROC | 1.0000 |
+| Distilled patch detector F1 | 1.0000 |
+| Distilled patch detector AUROC | 1.0000 |
+
+Interpretation:
+
+- Contrastive framing breaks the current hand-built rule features but not TF-IDF
+  or GPT-2 one-pass features.
+- The proxy error is higher than in the stress and matched pilots, suggesting
+  that contrastive source-boundary framing makes the patch-effect target harder
+  to approximate.
+- Since features-only and distilled detectors are both perfect, this run still
+  does not show an advantage for PatchDistill. It does provide a stronger
+  failure analysis: current templates remain separable by non-causal features.
+- Next step: add paraphrased contrastive frames and held-out frame families, then
+  compare features-only vs distilled detectors under a split that suppresses
+  template-order shortcuts.
