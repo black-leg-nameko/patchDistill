@@ -65,13 +65,15 @@ def write_markdown_summary(summary: dict, out_path: str | Path) -> None:
                 f1 = metrics.get("f1")
                 auroc = metrics.get("auroc")
                 fnr = metrics.get("false_negative_rate")
-                lines.append(f"- {name}: F1={f1}, AUROC={auroc}, FNR={fnr}")
+                r_at_10 = metrics.get("recall_at_fpr_0_1")
+                lines.append(f"- {name}: F1={f1}, AUROC={auroc}, FNR={fnr}, Recall@FPR<=0.10={r_at_10}")
         elif "metrics" in item:
             metrics = item["metrics"]
             lines.append(f"- model: `{item.get('model')}`")
             lines.append(f"- F1: `{metrics.get('f1')}`")
             lines.append(f"- AUROC: `{metrics.get('auroc')}`")
             lines.append(f"- FNR: `{metrics.get('false_negative_rate')}`")
+            lines.append(f"- Recall@FPR<=0.10: `{metrics.get('recall_at_fpr_0_1')}`")
         elif "mae" in item:
             lines.append(f"- MAE: `{item.get('mae')}`")
             lines.append(f"- MSE: `{item.get('mse')}`")

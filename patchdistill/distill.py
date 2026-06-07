@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import csv
 from pathlib import Path
 
 import numpy as np
@@ -13,7 +14,7 @@ from sklearn.preprocessing import StandardScaler
 
 from .experiments import classification_metrics
 from .experiments import split_indices
-from .io import read_jsonl, write_json
+from .io import ensure_parent, read_jsonl, write_json
 
 
 ID_KEYS = {
@@ -172,4 +173,35 @@ def fit_detector_from_features(
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
     write_json(out / "detector_metrics.json", metrics)
+
+    pred_path = ensure_parent(out / "predictions.csv")
+    with pred_path.open("w", encoding="utf-8", newline="") as f:
+        writer = csv.DictWriter(
+            f,
+            fieldnames=[
+                "id",
+                "label",
+                "score",
+                "split",
+                "split_group",
+                "template_id",
+                "attack_template_id",
+                "pair_role",
+            ],
+        )
+        writer.writeheader()
+        for row_idx, row_score in zip(test_idx, score, strict=True):
+            row = rows[int(row_idx)]
+            writer.writerow(
+                {
+                    "id": row.get("id", ""),
+                    "label": int(row["label"]),
+                    "score": float(row_score),
+                    "split": "test",
+                    "split_group": row.get("split_group", ""),
+                    "template_id": row.get("template_id", ""),
+                    "attack_template_id": row.get("attack_template_id", ""),
+                    "pair_role": row.get("pair_role", ""),
+                }
+            )
     return metrics

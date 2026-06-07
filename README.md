@@ -106,6 +106,8 @@ python -m patchdistill.cli hf-patch \
 Detector training intentionally excludes `label` and metadata fields from the
 numeric feature matrix. For held-out source-boundary frame evaluation, preserve
 metadata with `hf-extract` and pass `--split group` to `fit-detector`.
+Detector metrics include recall at fixed FPR targets, and `fit-detector` writes
+test-set scores to `predictions.csv` for threshold analysis.
 
 For real pilot experiments, replace `sshleifer/tiny-gpt2` with a small open
 model such as `gpt2`, `EleutherAI/pythia-410m`, or `Qwen/Qwen2.5-0.5B-Instruct`.

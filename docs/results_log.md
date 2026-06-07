@@ -232,3 +232,52 @@ Interpretation:
 - Rule features and pseudo-signature surrogate features are also near chance.
 - This is the first local profile that is hard enough to justify rerunning the
   corrected HF feature and patch-distillation detector pipeline.
+
+## 2026-06-08 Colab A100 GPT-2 Contrastive Frame Corrected Pilot
+
+This run used the corrected detector pipeline, where `label` and metadata fields
+are excluded from the numeric feature matrix. The split is `group`, holding out
+entire source-boundary frame families.
+
+Environment visible in the saved notebook output:
+
+- GPU: NVIDIA A100-SXM4-80GB
+- Model: `gpt2`
+- Data profile: `contrastive_frame`
+- Synthetic examples: 400
+- HF feature examples: 240
+- Residual patch examples: 32
+- Layers: `0,6,11`
+- Run name: `gpt2_a100_contrastive_frame_001`
+
+Surrogate contrastive-frame split:
+
+| Method | F1 | AUROC | FNR | FPR |
+| --- | ---: | ---: | ---: | ---: |
+| TF-IDF + Logistic Regression | 0.0000 | 0.5986 | 1.0000 | 0.0000 |
+| Rule features + Logistic Regression | 0.1702 | 0.5000 | 0.8974 | 0.1026 |
+| Surrogate PatchDistill | 0.1333 | 0.5000 | 0.9231 | 0.0769 |
+
+GPT-2 one-pass / patching pilot:
+
+| Component | Result |
+| --- | ---: |
+| `hf-extract` examples | 240 |
+| `hf-patch` examples | 32 |
+| Proxy MAE | 0.0654 |
+| Proxy MSE | 0.01196 |
+| HF features-only detector F1 | 0.6944 |
+| HF features-only detector AUROC | 0.7182 |
+| HF features-only detector FNR / FPR | 0.0000 / 1.0000 |
+| Distilled patch detector F1 | 0.6944 |
+| Distilled patch detector AUROC | 0.7545 |
+| Distilled patch detector FNR / FPR | 0.0000 / 1.0000 |
+
+Interpretation:
+
+- This is the first valid HF detector comparison after the label-leakage fix.
+- Distilled patch features improve ranking AUROC from 0.7182 to 0.7545.
+- At the default 0.5 threshold, both HF detectors predict every test example as
+  positive, giving FNR 0.0 but FPR 1.0. The classifiers are not calibrated yet.
+- Next step: rerun with the newly added fixed-FPR metrics and detector
+  prediction CSV, then compare recall at FPR <= 0.10 and thresholds.

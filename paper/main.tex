@@ -30,6 +30,7 @@
 さらに，Colab A100 上で GPT-2 による residual stream patching pilot を実行し，真の patch-effect target に対する proxy error を測定した．
 実装監査では HF detector 評価における label leakage を発見・修正し，修正前の detector 成績を無効化した．
 その後，paraphrased source-boundary frame を frame family ごとに holdout する contrastive-frame profile を追加し，TF-IDF などの表層 baseline が大きく崩れることを確認した．
+修正後 GPT-2 pilot では，distilled patch feature により AUROC が $0.718$ から $0.755$ に向上したが，default threshold では FPR が $1.0$ となり，固定 FPR での再評価が必要である．
 \end{abstract}
 
 \section{はじめに}
@@ -244,10 +245,33 @@ Surrogate PatchDistill & 0.133 & 0.500 & 0.923 & 0.077 \\
 \end{tabular}
 \end{table}
 
+修正後 pipeline を用いて，contrastive-frame profile 上で GPT-2 pilot を再実行した．
+240 例から one-pass feature を抽出し，32 例に residual stream patching を行った．
+Proxy error は MAE $=0.0654$，MSE $=0.01196$ であった．
+表~\ref{tab:corrected-gpt2-frame} に detector 結果を示す．
+HF features-only detector は AUROC $=0.718$，distilled patch feature を追加した detector は AUROC $=0.755$ となり，ranking metric では改善が見られた．
+一方，default threshold $0.5$ では両者とも test example をすべて positive と判定し，FNR $=0.0$ だが FPR $=1.0$ となった．
+したがって，現時点で言えることは，distilled patch feature が ranking を改善する可能性を示した一方で，実用的な検出器としては threshold calibration と fixed-FPR 評価が必須である，という点である．
+
+\begin{table}[t]
+\centering
+\caption{修正後 pipeline による GPT-2 contrastive-frame group split の detector 結果．}
+\label{tab:corrected-gpt2-frame}
+\begin{tabular}{lrrrr}
+\toprule
+手法 & F1 & AUROC & FNR & FPR \\
+\midrule
+HF features only & 0.694 & 0.718 & 0.000 & 1.000 \\
+HF features + distilled patch & 0.694 & 0.755 & 0.000 & 1.000 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
 \section{考察}
 初期結果から分かることは，MVP，stress，matched，contrastive では表層的手がかりや source-boundary の定型表現が強く，検出器比較としては不十分であるという点である．
 また，実装監査により HF detector 評価の label leakage を発見したため，修正前の detector 成績はすべて無効化した．
-一方，contrastive-frame group split は TF-IDF とルール特徴を大きく崩しており，修正後 pipeline の次評価として妥当である．
+一方，contrastive-frame group split は TF-IDF とルール特徴を大きく崩しており，修正後 pipeline の評価対象として妥当である．
+修正後 GPT-2 pilot では distilled patch feature が AUROC を改善したが，default threshold では FPR が高すぎるため，fixed-FPR recall を用いた再評価が必要である．
 したがって次段階では，以下の修正が必要である．
 \begin{enumerate}
   \item benign hard prompt を増やし，引用，教育，コード，法務文書に含まれる命令表現をより多様化する．
@@ -257,7 +281,7 @@ Surrogate PatchDistill & 0.133 & 0.500 & 0.923 & 0.077 \\
   \item hidden-state-only probe，attention-stat-only detector，PatchDistill without proxy，PatchDistill full の ablation を行う．
 \end{enumerate}
 
-次の Colab A100 実験では，修正済み pipeline を用いて contrastive-frame group split 上で GPT-2 を再実行する．
+次の Colab A100 実験では，固定 FPR 指標と prediction CSV を保存する更新済み pipeline で GPT-2 contrastive-frame を再実行する．
 その後，Qwen2.5-0.5B-Instruct，Qwen2.5-1.5B，Gemma-2-2B，7B 級 instruction-tuned model へ段階的に拡張する．
 
 \section{限界}

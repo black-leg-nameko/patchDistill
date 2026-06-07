@@ -39,7 +39,9 @@ def test_fit_detector_from_mock_features(tmp_path: Path):
     write_jsonl(feature_path, features)
     metrics = fit_detector_from_features(feature_path, out, test_size=0.33)
     assert metrics["model"] == "hf_features_logreg"
+    assert "recall_at_fpr_0_1" in metrics["metrics"]
     assert (out / "detector_metrics.json").exists()
+    assert (out / "predictions.csv").exists()
 
 
 def test_fit_detector_supports_group_split(tmp_path: Path):
@@ -59,4 +61,6 @@ def test_fit_detector_supports_group_split(tmp_path: Path):
     metrics = fit_detector_from_features(feature_path, out, split="group", test_size=0.5, random_state=3)
     assert metrics["split"] == "group"
     assert "label" not in metrics["feature_names"]
+    assert "recall_at_fpr_0_1" in metrics["metrics"]
     assert (out / "detector_metrics.json").exists()
+    assert (out / "predictions.csv").exists()

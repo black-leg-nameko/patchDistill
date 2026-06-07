@@ -38,13 +38,29 @@ def _safe_auprc(y_true: np.ndarray, y_score: np.ndarray) -> float | None:
     return float(average_precision_score(y_true, y_score))
 
 
+def _recall_at_max_fpr(y_true: np.ndarray, y_score: np.ndarray, max_fpr: float) -> dict:
+    positives = y_true == 1
+    negatives = y_true == 0
+    thresholds = [float("inf")] + sorted({float(score) for score in y_score}, reverse=True)
+    best = {"recall": 0.0, "fpr": 0.0, "threshold": None}
+    for threshold in thresholds:
+        y_pred = y_score >= threshold
+        fpr = float((y_pred & negatives).sum() / max(negatives.sum(), 1))
+        if fpr > max_fpr:
+            continue
+        recall = float((y_pred & positives).sum() / max(positives.sum(), 1))
+        if recall > best["recall"] or (recall == best["recall"] and fpr < best["fpr"]):
+            best = {"recall": recall, "fpr": fpr, "threshold": float(threshold)}
+    return best
+
+
 def classification_metrics(y_true: np.ndarray, y_score: np.ndarray, threshold: float = 0.5) -> dict:
     y_pred = (y_score >= threshold).astype(int)
     positives = y_true == 1
     negatives = y_true == 0
     fnr = float(((y_pred == 0) & positives).sum() / max(positives.sum(), 1))
     fpr = float(((y_pred == 1) & negatives).sum() / max(negatives.sum(), 1))
-    return {
+    metrics = {
         "accuracy": float(accuracy_score(y_true, y_pred)),
         "precision": float(precision_score(y_true, y_pred, zero_division=0)),
         "recall": float(recall_score(y_true, y_pred, zero_division=0)),
@@ -54,6 +70,13 @@ def classification_metrics(y_true: np.ndarray, y_score: np.ndarray, threshold: f
         "false_negative_rate": fnr,
         "false_positive_rate": fpr,
     }
+    for target in (0.05, 0.1, 0.2):
+        point = _recall_at_max_fpr(y_true, y_score, max_fpr=target)
+        suffix = str(target).replace(".", "_")
+        metrics[f"recall_at_fpr_{suffix}"] = point["recall"]
+        metrics[f"threshold_at_fpr_{suffix}"] = point["threshold"]
+        metrics[f"actual_fpr_at_fpr_{suffix}"] = point["fpr"]
+    return metrics
 
 
 def _split_key(row: dict, split: str) -> str:
