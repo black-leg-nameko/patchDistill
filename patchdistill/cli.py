@@ -110,6 +110,20 @@ def cmd_collect_results(args: argparse.Namespace) -> None:
     print(json.dumps({"out": str(args.out), "markdown": str(args.markdown) if args.markdown else None, "n": len(summary["artifacts"])}, ensure_ascii=False, indent=2))
 
 
+def cmd_archive_results(args: argparse.Namespace) -> None:
+    from .reporting import archive_results
+
+    manifest = archive_results(
+        runs_dir=args.runs,
+        archive_root=args.archive_root,
+        name=args.name,
+        include_jsonl=not args.no_jsonl,
+        include_csv=not args.no_csv,
+        max_file_mb=args.max_file_mb,
+    )
+    print(json.dumps({"archive_dir": manifest["archive_dir"], "copied": len(manifest["copied"]), "skipped": len(manifest["skipped"])}, ensure_ascii=False, indent=2))
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="PatchDistill experiment commands")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -177,6 +191,15 @@ def build_parser() -> argparse.ArgumentParser:
     collect.add_argument("--out", type=Path, default=Path("runs/summary.json"))
     collect.add_argument("--markdown", type=Path, default=Path("runs/summary.md"))
     collect.set_defaults(func=cmd_collect_results)
+
+    archive = sub.add_parser("archive-results", help="Archive run outputs under artifacts/ for GitHub")
+    archive.add_argument("--runs", type=Path, default=Path("runs"))
+    archive.add_argument("--archive-root", type=Path, default=Path("artifacts/colab_runs"))
+    archive.add_argument("--name", default=None)
+    archive.add_argument("--no-jsonl", action="store_true", help="Do not include JSONL files")
+    archive.add_argument("--no-csv", action="store_true", help="Do not include CSV files")
+    archive.add_argument("--max-file-mb", type=float, default=50.0)
+    archive.set_defaults(func=cmd_archive_results)
 
     return parser
 
