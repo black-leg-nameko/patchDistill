@@ -35,6 +35,13 @@ Expected outputs:
 - `runs/surrogate_mvp/predictions.csv`
 - `runs/surrogate_mvp/proxy_metrics.json`
 
+For a harder synthetic split with paraphrased attacks and stronger benign-hard
+negatives:
+
+```bash
+scripts/run_stress_surrogate.sh
+```
+
 ## Colab / GPU Path
 
 Install dependencies in Colab:

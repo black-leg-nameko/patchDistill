@@ -22,8 +22,8 @@ def _parse_layers(value: str) -> list[int]:
 
 
 def cmd_make_data(args: argparse.Namespace) -> None:
-    rows = write_synthetic_dataset(args.out, n=args.n, seed=args.seed)
-    print(json.dumps({"out": str(args.out), "n": len(rows)}, ensure_ascii=False))
+    rows = write_synthetic_dataset(args.out, n=args.n, seed=args.seed, profile=args.profile)
+    print(json.dumps({"out": str(args.out), "n": len(rows), "profile": args.profile}, ensure_ascii=False))
 
 
 def cmd_run_surrogate(args: argparse.Namespace) -> None:
@@ -131,6 +131,7 @@ def build_parser() -> argparse.ArgumentParser:
     make_data = sub.add_parser("make-data", help="Create synthetic direct PI JSONL data")
     make_data.add_argument("--n", type=int, default=160)
     make_data.add_argument("--seed", type=int, default=13)
+    make_data.add_argument("--profile", choices=["mvp", "stress"], default="mvp")
     make_data.add_argument("--out", type=Path, required=True)
     make_data.set_defaults(func=cmd_make_data)
 

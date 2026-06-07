@@ -1,0 +1,11 @@
+{
+  "dataset": "data/synthetic_direct_pi_stress.jsonl",
+  "run_dir": "runs/surrogate_stress",
+  "n_examples": 320,
+  "profile": "stress",
+  "split": "template",
+  "test_size": 0.25,
+  "random_state": 17,
+  "pseudo_signature_dim": 12
+}
+
