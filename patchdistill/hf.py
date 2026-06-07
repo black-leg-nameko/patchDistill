@@ -113,6 +113,13 @@ class HFOnePassExtractor:
         result: dict[str, float | int | str] = {
             "id": row["id"],
             "label": int(row["label"]),
+            "template_id": row.get("template_id", ""),
+            "attack_template_id": row.get("attack_template_id", ""),
+            "split_group": row.get("split_group", ""),
+            "pair_role": row.get("pair_role", ""),
+            "profile": row.get("profile", ""),
+            "source": row.get("source", ""),
+            "language": row.get("language", ""),
             "n_tokens": int(encoded["input_ids"].shape[1]),
             "n_span_tokens": int(len(span_positions)),
         }

@@ -27,8 +27,9 @@
 本稿では，直接的プロンプトインジェクションを「system instruction 由来の制御信号」から「user-side injected instruction 由来の制御信号」への内部制御シフトとして捉え，activation patching により得られる patch-effect profile を Causal Patch Signature として定義する．
 さらに，高コストな activation patching を推論時に実行するのではなく，offline の教師信号生成に限定し，1 回の forward pass で取得可能な hidden state，attention 統計，logit 統計から patch signature を近似する proxy model へ蒸留する PatchDistill を提案する．
 初期実装では，合成 direct prompt injection データに対して，TF-IDF，ルール特徴，疑似 patch signature を用いた surrogate PatchDistill の比較を行い，実験パイプラインの妥当性を確認した．
-さらに，Colab A100 上で GPT-2 による residual stream patching pilot を実行し，真の patch-effect target に対する proxy error と検出性能を測定した．
-現時点の合成データでは，contrastive profile を含めても one-pass hidden features のみで完全分類できており，PatchDistill の優位性ではなく，より厳密なデータ設計と held-out framing 評価の必要性を示す結果となった．
+さらに，Colab A100 上で GPT-2 による residual stream patching pilot を実行し，真の patch-effect target に対する proxy error を測定した．
+実装監査では HF detector 評価における label leakage を発見・修正し，修正前の detector 成績を無効化した．
+その後，paraphrased source-boundary frame を frame family ごとに holdout する contrastive-frame profile を追加し，TF-IDF などの表層 baseline が大きく崩れることを確認した．
 \end{abstract}
 
 \section{はじめに}
@@ -188,42 +189,65 @@ Stress & Surrogate PatchDistill & 1.000 & 1.000 & 0.000 & 0.000 \\
 
 Colab A100 上で GPT-2 を用いた初期 pilot も実行した．
 各 profile について 160 例から one-pass feature を抽出し，positive 24 例に対して residual stream patching を行った．
-表~\ref{tab:gpt2-pilots} に，真の patch-effect target に対する proxy error と検出性能を示す．
-Stress profile では proxy model の patch-effect prediction error は MAE $=0.0277$，MSE $=0.00407$ であった．
-HF feature のみの Logistic Regression と，distilled patch feature を加えた Logistic Regression は，どちらも F1 $=1.0$，AUROC $=1.0$ となった．
-この結果は優位性の証拠ではなく，むしろ現行 synthetic data が GPT-2 の one-pass 統計だけで分離できるほど容易であることを示す．
+表~\ref{tab:gpt2-pilots} に，真の patch-effect target に対する proxy error を示す．
+実装監査により，初期 pilot の HF detector 学習では numeric feature matrix に label が混入していたことが分かった．
+そのため，修正前に得られた features-only detector および distilled detector の F1/AUROC は本稿の証拠として用いない．
+以下では residual patching と proxy prediction error のみを，修正後 detector 再実験に向けた preliminary diagnostic として扱う．
 
 さらに，positive と negative の両方に同一の疑わしい span を含める matched profile を追加した．
 Matched profile の local surrogate 実験では，ルール特徴の F1 は $0.722$，AUROC は $0.787$ まで低下した．
 これは，span 有無や危険語数に依存するショートカットを一定程度抑制できたことを示す．
 ただし TF-IDF は依然として F1 $=1.0$，AUROC $=1.0$ であり，source boundary を示す prefix 語彙が新たなショートカットになっている可能性が高い．
 GPT-2 を用いた matched profile の Colab A100 pilot では，one-pass feature を 160 例から抽出し，24 例に residual patching を行った．
-Proxy error は MAE $=0.0528$，MSE $=0.01265$ であり，HF feature のみの検出器と distilled patch feature を加えた検出器はいずれも F1 $=1.0$，AUROC $=1.0$ であった．
+Proxy error は MAE $=0.0528$，MSE $=0.01265$ であった．
 このことから，matched profile は手作りルールを崩す一方で，GPT-2 の内部統計や TF-IDF から見える prefix/source-boundary の手がかりはまだ強いと考えられる．
 さらに，境界語彙を両クラスで共有し，否定と語順のみを反転させる contrastive profile を追加した．
 Local surrogate 実験では，ルール特徴の AUROC は $0.5$ まで低下したが，TF-IDF は依然として F1 $=1.0$，AUROC $=1.0$ であった．
 これは，現在の TF-IDF baseline が bigram の語順ショートカットを利用している可能性を示す．
 Contrastive profile の GPT-2 pilot では，proxy error は MAE $=0.0902$，MSE $=0.03227$ まで増加した．
-これは contrastive framing が patch-effect target の近似を難しくしている可能性を示す一方，features-only detector と distilled detector はどちらも依然として F1 $=1.0$，AUROC $=1.0$ であった．
-したがって，contrastive profile はルール特徴の破綻と proxy target の難化を観測するには有用であるが，検出器比較としてはまだ不十分である．
+これは contrastive framing が patch-effect target の近似を難しくしている可能性を示す．
+ただし，contrastive profile は TF-IDF baseline が依然として完全分類できるため，検出器比較としてはまだ不十分である．
 
 \begin{table}[t]
 \centering
-\caption{Colab A100 上の GPT-2 residual patching pilot．各 profile で 160 例の one-pass feature を抽出し，24 例に residual stream patching を行った．}
+\caption{Colab A100 上の GPT-2 residual patching pilot における proxy prediction error．修正前 detector 成績は label leakage のため無効化した．}
 \label{tab:gpt2-pilots}
-\begin{tabular}{lrrrrrr}
+\begin{tabular}{lrrr}
 \toprule
-Profile & MAE & MSE & Feat. F1 & Feat. AUROC & Distill F1 & Distill AUROC \\
+Profile & Patched examples & MAE & MSE \\
 \midrule
-Stress & 0.0277 & 0.00407 & 1.000 & 1.000 & 1.000 & 1.000 \\
-Matched & 0.0528 & 0.01265 & 1.000 & 1.000 & 1.000 & 1.000 \\
-Contrastive & 0.0902 & 0.03227 & 1.000 & 1.000 & 1.000 & 1.000 \\
+Stress & 24 & 0.0277 & 0.00407 \\
+Matched & 24 & 0.0528 & 0.01265 \\
+Contrastive & 24 & 0.0902 & 0.03227 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+この失敗分析を踏まえ，複数の source-boundary frame family を導入した contrastive-frame profile を追加した．
+各 row は frame family を表す \texttt{split\_group} を持ち，group split では frame family 全体を test 側に holdout する．
+表~\ref{tab:contrastive-frame} に local surrogate の結果を示す．
+TF-IDF は F1 $=0.0$，AUROC $=0.599$ まで低下し，ルール特徴および surrogate PatchDistill もほぼ chance となった．
+これは，従来の template/order shortcut を抑制した最初の profile であり，修正後の HF detector と patch-distillation 評価を行う次の対象である．
+
+\begin{table}[t]
+\centering
+\caption{Contrastive-frame profile の group split における local surrogate 結果．}
+\label{tab:contrastive-frame}
+\begin{tabular}{lrrrr}
+\toprule
+手法 & F1 & AUROC & FNR & FPR \\
+\midrule
+TF-IDF + LR & 0.000 & 0.599 & 1.000 & 0.000 \\
+Rule features + LR & 0.170 & 0.500 & 0.897 & 0.103 \\
+Surrogate PatchDistill & 0.133 & 0.500 & 0.923 & 0.077 \\
 \bottomrule
 \end{tabular}
 \end{table}
 
 \section{考察}
-初期結果から分かることは，現時点の synthetic データでは表層的手がかりや長さ・span 有無などの副次的手がかりが強く，検出器比較としては不十分であるという点である．
+初期結果から分かることは，MVP，stress，matched，contrastive では表層的手がかりや source-boundary の定型表現が強く，検出器比較としては不十分であるという点である．
+また，実装監査により HF detector 評価の label leakage を発見したため，修正前の detector 成績はすべて無効化した．
+一方，contrastive-frame group split は TF-IDF とルール特徴を大きく崩しており，修正後 pipeline の次評価として妥当である．
 したがって次段階では，以下の修正が必要である．
 \begin{enumerate}
   \item benign hard prompt を増やし，引用，教育，コード，法務文書に含まれる命令表現をより多様化する．
@@ -233,8 +257,8 @@ Contrastive & 0.0902 & 0.03227 & 1.000 & 1.000 & 1.000 & 1.000 \\
   \item hidden-state-only probe，attention-stat-only detector，PatchDistill without proxy，PatchDistill full の ablation を行う．
 \end{enumerate}
 
-次の Colab A100 実験では，GPT-2 で確認した pipeline を Qwen2.5-0.5B-Instruct に拡張し，さらに Qwen2.5-1.5B，Gemma-2-2B，7B 級 instruction-tuned model へ段階的に拡張する．
-同時に，paraphrased contrastive frames と held-out frame family split を追加し，features-only detector が使う template-order shortcut を抑制する．
+次の Colab A100 実験では，修正済み pipeline を用いて contrastive-frame group split 上で GPT-2 を再実行する．
+その後，Qwen2.5-0.5B-Instruct，Qwen2.5-1.5B，Gemma-2-2B，7B 級 instruction-tuned model へ段階的に拡張する．
 
 \section{限界}
 本稿の現時点の結果は，合成データと小規模な GPT-2 residual patching pilot に基づく予備実験である．

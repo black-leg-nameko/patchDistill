@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from patchdistill.data import write_synthetic_dataset
+from patchdistill.distill import numeric_matrix
 from patchdistill.experiments import run_surrogate_experiment
 
 
@@ -14,3 +15,26 @@ def test_surrogate_pipeline_writes_outputs(tmp_path: Path):
     assert (out_dir / "predictions.csv").exists()
     assert "patchdistill_surrogate" in result["metrics"]["models"]
 
+
+def test_numeric_matrix_excludes_label_and_metadata():
+    rows = [
+        {
+            "id": "a",
+            "label": 0,
+            "template_id": "t1",
+            "split_group": "g1",
+            "n_tokens": 10,
+            "score": 0.25,
+        },
+        {
+            "id": "b",
+            "label": 1,
+            "template_id": "t2",
+            "split_group": "g2",
+            "n_tokens": 12,
+            "score": 0.75,
+        },
+    ]
+    x, names = numeric_matrix(rows)
+    assert names == ["n_tokens", "score"]
+    assert x.shape == (2, 2)

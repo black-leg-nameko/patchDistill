@@ -97,6 +97,7 @@ def cmd_fit_detector(args: argparse.Namespace) -> None:
         out_dir=args.out,
         test_size=args.test_size,
         random_state=args.seed,
+        split=args.split,
     )
     print(json.dumps({"out": str(args.out), "model": metrics["model"], "metrics": metrics["metrics"]}, ensure_ascii=False, indent=2))
 
@@ -131,14 +132,14 @@ def build_parser() -> argparse.ArgumentParser:
     make_data = sub.add_parser("make-data", help="Create synthetic direct PI JSONL data")
     make_data.add_argument("--n", type=int, default=160)
     make_data.add_argument("--seed", type=int, default=13)
-    make_data.add_argument("--profile", choices=["mvp", "stress", "matched", "contrastive"], default="mvp")
+    make_data.add_argument("--profile", choices=["mvp", "stress", "matched", "contrastive", "contrastive_frame"], default="mvp")
     make_data.add_argument("--out", type=Path, required=True)
     make_data.set_defaults(func=cmd_make_data)
 
     surrogate = sub.add_parser("run-surrogate", help="Run local surrogate PatchDistill experiment")
     surrogate.add_argument("--data", type=Path, required=True)
     surrogate.add_argument("--out", type=Path, required=True)
-    surrogate.add_argument("--split", choices=["random", "template"], default="template")
+    surrogate.add_argument("--split", choices=["random", "template", "group"], default="template")
     surrogate.add_argument("--test-size", type=float, default=0.25)
     surrogate.add_argument("--seed", type=int, default=13)
     surrogate.add_argument("--pseudo-signature-dim", type=int, default=12)
@@ -185,6 +186,7 @@ def build_parser() -> argparse.ArgumentParser:
     fit_detector.add_argument("--out", type=Path, required=True)
     fit_detector.add_argument("--test-size", type=float, default=0.25)
     fit_detector.add_argument("--seed", type=int, default=13)
+    fit_detector.add_argument("--split", choices=["random", "template", "group"], default="random")
     fit_detector.set_defaults(func=cmd_fit_detector)
 
     collect = sub.add_parser("collect-results", help="Collect JSON result artifacts under runs/")

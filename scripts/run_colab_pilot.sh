@@ -4,6 +4,10 @@ set -euo pipefail
 MODEL_NAME="${MODEL_NAME:-gpt2}"
 RUN_NAME="${RUN_NAME:-gpt2_a100_pilot}"
 LAYERS="${LAYERS:-0,6,11}"
+DATA_PROFILE="${DATA_PROFILE:-mvp}"
+DATA_PATH="${DATA_PATH:-data/synthetic_direct_pi_${DATA_PROFILE}.jsonl}"
+SURROGATE_SPLIT="${SURROGATE_SPLIT:-template}"
+DETECTOR_SPLIT="${DETECTOR_SPLIT:-random}"
 N_DATA="${N_DATA:-160}"
 MAX_FEATURE_EXAMPLES="${MAX_FEATURE_EXAMPLES:-80}"
 MAX_PATCH_EXAMPLES="${MAX_PATCH_EXAMPLES:-12}"
@@ -19,15 +23,18 @@ fi
 nvidia-smi || true
 python -m pip install -r requirements.txt
 
-python -m patchdistill.cli make-data --n "${N_DATA}" --out data/synthetic_direct_pi.jsonl
+python -m patchdistill.cli make-data \
+  --n "${N_DATA}" \
+  --profile "${DATA_PROFILE}" \
+  --out "${DATA_PATH}"
 python -m patchdistill.cli run-surrogate \
-  --data data/synthetic_direct_pi.jsonl \
-  --out runs/surrogate_mvp \
-  --split template
+  --data "${DATA_PATH}" \
+  --out "runs/surrogate_${DATA_PROFILE}" \
+  --split "${SURROGATE_SPLIT}"
 
 python -m patchdistill.cli hf-extract \
   --model "${MODEL_NAME}" \
-  --data data/synthetic_direct_pi.jsonl \
+  --data "${DATA_PATH}" \
   --out "runs/${RUN_NAME}_features.jsonl" \
   --max-examples "${MAX_FEATURE_EXAMPLES}" \
   --layers "${LAYERS}" \
@@ -36,7 +43,7 @@ python -m patchdistill.cli hf-extract \
 
 python -m patchdistill.cli hf-patch \
   --model "${MODEL_NAME}" \
-  --data data/synthetic_direct_pi.jsonl \
+  --data "${DATA_PATH}" \
   --out "runs/${RUN_NAME}_patch.jsonl" \
   --layers "${LAYERS}" \
   --max-examples "${MAX_PATCH_EXAMPLES}" \
@@ -51,15 +58,16 @@ python -m patchdistill.cli fit-proxy \
 
 python -m patchdistill.cli fit-detector \
   --features "runs/${RUN_NAME}_features.jsonl" \
-  --out "runs/${RUN_NAME}_detector_features_only"
+  --out "runs/${RUN_NAME}_detector_features_only" \
+  --split "${DETECTOR_SPLIT}"
 
 python -m patchdistill.cli fit-detector \
   --features "runs/${RUN_NAME}_features.jsonl" \
   --patch "runs/${RUN_NAME}_patch.jsonl" \
-  --out "runs/${RUN_NAME}_detector_distilled"
+  --out "runs/${RUN_NAME}_detector_distilled" \
+  --split "${DETECTOR_SPLIT}"
 
 python -m patchdistill.cli collect-results \
   --runs runs \
   --out runs/summary.json \
   --markdown runs/summary.md
-

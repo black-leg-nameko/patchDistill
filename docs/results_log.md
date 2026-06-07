@@ -1,5 +1,20 @@
 # Results Log
 
+## 2026-06-08 Correction: HF Detector Label Leakage
+
+A code audit found that `patchdistill.distill.numeric_matrix` included the
+numeric `label` field as an input feature for HF detector training. Therefore,
+the HF detector F1/AUROC values reported in the GPT-2 stress, matched, and
+contrastive pilots before this fix are invalid and should not be cited as
+evidence. The affected outputs are the `*_detector_features_only` and
+`*_detector_distilled` metrics.
+
+The pipeline has been corrected so that `label` and metadata fields are excluded
+from detector features. `hf-extract` now preserves metadata such as
+`split_group`, and `fit-detector` supports `--split group` for held-out frame
+family evaluation. The GPT-2/Qwen HF detector experiments should be rerun with
+the corrected pipeline.
+
 ## 2026-06-07 Colab A100 GPT-2 Stress Pilot
 
 Environment visible in the saved notebook output:
@@ -183,3 +198,37 @@ Interpretation:
 - Next step: add paraphrased contrastive frames and held-out frame families, then
   compare features-only vs distilled detectors under a split that suppresses
   template-order shortcuts.
+
+Post-audit status:
+
+- The detector F1/AUROC values in this section are invalid because they were
+  produced before the `label` leakage fix.
+- The run still motivated the next profile because the local contrastive
+  surrogate showed rule-feature failure and the patch proxy target appeared
+  harder than in earlier pilots.
+
+## 2026-06-08 Local Contrastive Frame Group-Split Surrogate
+
+The `contrastive_frame` profile extends `contrastive` with paraphrased source
+boundary frames. Each example has a `split_group` equal to its frame family, and
+the surrogate run uses `--split group`, so entire frame families are held out.
+
+Configuration:
+
+- Synthetic examples: 400
+- Seed: 31
+- Split: `group`
+
+| Method | F1 | AUROC | FNR | FPR |
+| --- | ---: | ---: | ---: | ---: |
+| TF-IDF + Logistic Regression | 0.0000 | 0.5986 | 1.0000 | 0.0000 |
+| Rule features + Logistic Regression | 0.1702 | 0.5000 | 0.8974 | 0.1026 |
+| Surrogate PatchDistill | 0.1333 | 0.5000 | 0.9231 | 0.0769 |
+
+Interpretation:
+
+- Holding out frame families finally breaks the TF-IDF classifier at the default
+  threshold and reduces its AUROC close to chance.
+- Rule features and pseudo-signature surrogate features are also near chance.
+- This is the first local profile that is hard enough to justify rerunning the
+  corrected HF feature and patch-distillation detector pipeline.

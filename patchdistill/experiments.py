@@ -56,16 +56,24 @@ def classification_metrics(y_true: np.ndarray, y_score: np.ndarray, threshold: f
     }
 
 
+def _split_key(row: dict, split: str) -> str:
+    if split == "template":
+        return f"{row['template_id']}::{row['attack_template_id']}"
+    if split == "group":
+        return str(row.get("split_group") or f"{row['template_id']}::{row['attack_template_id']}")
+    raise ValueError(f"Unknown split key type: {split}")
+
+
 def split_indices(rows: list[dict], y: np.ndarray, split: str, test_size: float, seed: int) -> tuple[np.ndarray, np.ndarray]:
     if split == "random":
         splitter = StratifiedShuffleSplit(n_splits=1, test_size=test_size, random_state=seed)
         train_idx, test_idx = next(splitter.split(np.zeros_like(y), y))
         return train_idx, test_idx
 
-    if split != "template":
+    if split not in {"template", "group"}:
         raise ValueError(f"Unknown split: {split}")
 
-    keys = sorted({f"{row['template_id']}::{row['attack_template_id']}" for row in rows})
+    keys = sorted({_split_key(row, split) for row in rows})
     rng = np.random.default_rng(seed)
     rng.shuffle(keys)
     n_test_keys = max(1, int(round(len(keys) * test_size)))
@@ -73,7 +81,7 @@ def split_indices(rows: list[dict], y: np.ndarray, split: str, test_size: float,
     train_idx: list[int] = []
     test_idx: list[int] = []
     for i, row in enumerate(rows):
-        key = f"{row['template_id']}::{row['attack_template_id']}"
+        key = _split_key(row, split)
         if key in test_keys:
             test_idx.append(i)
         else:
@@ -174,6 +182,7 @@ def run_surrogate_experiment(
                 "pair_role",
                 "template_id",
                 "attack_template_id",
+                "split_group",
                 "tfidf_score",
                 "rule_score",
                 "patchdistill_surrogate_score",
@@ -189,6 +198,7 @@ def run_surrogate_experiment(
                     "pair_role": row["pair_role"],
                     "template_id": row["template_id"],
                     "attack_template_id": row["attack_template_id"],
+                    "split_group": row.get("split_group", ""),
                     "tfidf_score": float(tfidf_s),
                     "rule_score": float(rule_s),
                     "patchdistill_surrogate_score": float(dist_s),
@@ -196,4 +206,3 @@ def run_surrogate_experiment(
             )
 
     return {"metrics": metrics, "proxy_metrics": proxy_metrics}
-

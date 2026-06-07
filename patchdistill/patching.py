@@ -254,6 +254,9 @@ def run_patch_file(
                 "label": int(row["label"]),
                 "template_id": row["template_id"],
                 "attack_template_id": row["attack_template_id"],
+                "split_group": row.get("split_group", ""),
+                "pair_role": row.get("pair_role", ""),
+                "profile": row.get("profile", ""),
                 "malicious_span": row.get("malicious_span", ""),
                 "patch_signature": signature,
             }

@@ -7,15 +7,28 @@ from pathlib import Path
 import numpy as np
 from sklearn.linear_model import LogisticRegression, Ridge
 from sklearn.metrics import mean_absolute_error, mean_squared_error
-from sklearn.model_selection import StratifiedShuffleSplit, train_test_split
+from sklearn.model_selection import train_test_split
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
 
 from .experiments import classification_metrics
+from .experiments import split_indices
 from .io import read_jsonl, write_json
 
 
-ID_KEYS = {"id", "template_id", "attack_template_id", "malicious_span", "patch_signature"}
+ID_KEYS = {
+    "id",
+    "label",
+    "template_id",
+    "attack_template_id",
+    "split_group",
+    "pair_role",
+    "profile",
+    "source",
+    "language",
+    "malicious_span",
+    "patch_signature",
+}
 
 
 def numeric_matrix(rows: list[dict]) -> tuple[np.ndarray, list[str]]:
@@ -102,6 +115,7 @@ def fit_detector_from_features(
     patch_path: str | Path | None = None,
     test_size: float = 0.25,
     random_state: int = 13,
+    split: str = "random",
 ) -> dict:
     rows = read_jsonl(features_path)
     y = np.asarray([int(row["label"]) for row in rows], dtype=int)
@@ -136,12 +150,7 @@ def fit_detector_from_features(
     min_class_count = int(class_counts[class_counts > 0].min())
     if min_class_count < 2:
         raise ValueError("Detector training needs at least two examples per class")
-    n_test = max(2, int(round(len(rows) * test_size)))
-    n_test = min(n_test, len(rows) - 2)
-    if n_test < 2:
-        raise ValueError("Detector training needs more examples for a train/test split")
-    splitter = StratifiedShuffleSplit(n_splits=1, test_size=n_test, random_state=random_state)
-    train_idx, test_idx = next(splitter.split(x, y))
+    train_idx, test_idx = split_indices(rows, y, split=split, test_size=test_size, seed=random_state)
     classifier = make_pipeline(
         StandardScaler(),
         LogisticRegression(max_iter=1000, class_weight="balanced", random_state=random_state),
@@ -154,6 +163,7 @@ def fit_detector_from_features(
         "n_total": int(len(rows)),
         "n_train": int(len(train_idx)),
         "n_test": int(len(test_idx)),
+        "split": split,
         "model": model_name,
         "feature_names": feature_names,
         "metrics": classification_metrics(y[test_idx], score),

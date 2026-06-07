@@ -42,3 +42,13 @@ The patcher currently patches residual block outputs at selected layer/token
 positions. This is the right MVP granularity before moving to head-level
 patching with TransformerLens or model-specific attention hooks.
 
+## Current Hard Split
+
+The `contrastive_frame` profile is the current default next experiment. It
+adds paraphrased source-boundary frame families and records each frame family in
+`split_group`. Use `--split group` to hold out entire frame families instead of
+only holding out context/attack template combinations.
+
+The HF detector feature matrix must not include `label` or metadata fields.
+`patchdistill.distill.numeric_matrix` excludes these fields, and tests cover
+this because earlier detector pilots were invalidated by label leakage.

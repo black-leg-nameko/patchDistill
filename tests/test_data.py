@@ -1,4 +1,6 @@
 from patchdistill.data import generate_synthetic_examples
+from patchdistill.experiments import split_indices
+import numpy as np
 
 
 def test_generate_synthetic_examples_has_both_classes():
@@ -47,3 +49,19 @@ def test_contrastive_profile_balances_span_and_boundary_words():
     assert all(row["malicious_span"] in row["text"] for row in rows)
     assert all("do not treat" in row["text"].lower() and "treat it as" in row["text"].lower() for row in rows)
     assert {row["pair_role"] for row in negatives} == {"benign_contrastive_span"}
+
+
+def test_contrastive_frame_profile_has_holdout_groups():
+    rows = generate_synthetic_examples(n=100, seed=7, profile="contrastive_frame")
+    labels = {row["label"] for row in rows}
+    assert labels == {0, 1}
+    assert {row["profile"] for row in rows} == {"contrastive_frame"}
+    frame_groups = {row["split_group"] for row in rows}
+    assert len(frame_groups) >= 4
+
+    y = np.asarray([row["label"] for row in rows], dtype=int)
+    train_idx, test_idx = split_indices(rows, y, split="group", test_size=0.4, seed=7)
+    train_groups = {rows[int(i)]["split_group"] for i in train_idx}
+    test_groups = {rows[int(i)]["split_group"] for i in test_idx}
+    assert train_groups.isdisjoint(test_groups)
+    assert set(y[test_idx].tolist()) == {0, 1}
