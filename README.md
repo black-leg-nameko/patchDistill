@@ -42,6 +42,13 @@ negatives:
 scripts/run_stress_surrogate.sh
 ```
 
+For a shortcut-resistant split where suspicious spans appear in both positive
+and negative examples:
+
+```bash
+scripts/run_matched_surrogate.sh
+```
+
 ## Colab / GPU Path
 
 Install dependencies in Colab:

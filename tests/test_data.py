@@ -23,3 +23,15 @@ def test_stress_profile_adds_paraphrase_and_benign_hard_examples():
     assert "atk_disregard_directives" in attack_template_ids or "atk_internal_config_audit" in attack_template_ids
     assert "audit" in benign_sources or "security" in benign_sources
     assert {row["profile"] for row in rows} == {"stress"}
+
+
+def test_matched_profile_puts_span_in_both_classes():
+    rows = generate_synthetic_examples(n=40, seed=5, profile="matched")
+    labels = {row["label"] for row in rows}
+    assert labels == {0, 1}
+    assert {row["profile"] for row in rows} == {"matched"}
+    negatives = [row for row in rows if row["label"] == 0]
+    positives = [row for row in rows if row["label"] == 1]
+    assert all(row["malicious_span"] in row["text"] for row in negatives)
+    assert all(row["malicious_span"] in row["text"] for row in positives)
+    assert {row["pair_role"] for row in negatives} == {"benign_matched_span"}

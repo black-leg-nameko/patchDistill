@@ -1,0 +1,11 @@
+{
+  "dataset": "data/synthetic_direct_pi_matched.jsonl",
+  "run_dir": "runs/surrogate_matched",
+  "n_examples": 320,
+  "profile": "matched",
+  "split": "template",
+  "test_size": 0.25,
+  "random_state": 23,
+  "pseudo_signature_dim": 12
+}
+

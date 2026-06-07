@@ -49,3 +49,24 @@ Archive note:
 - Push failed with GitHub HTTP 403, so the full JSONL artifacts were not yet
   available in the GitHub repository at the time of this note.
 
+## 2026-06-08 Local Matched Surrogate Pilot
+
+The `matched` profile places the same suspicious span in both classes. In
+positive examples, the span is an active instruction. In negative examples, it is
+document/log/training content that should be treated as data. Negative examples
+also keep `malicious_span` populated so span-token features alone cannot separate
+the classes.
+
+| Method | F1 | AUROC | FNR | FPR |
+| --- | ---: | ---: | ---: | ---: |
+| TF-IDF + Logistic Regression | 1.0000 | 1.0000 | 0.0000 | 0.0000 |
+| Rule features + Logistic Regression | 0.7222 | 0.7868 | 0.2041 | 0.4082 |
+| Surrogate PatchDistill | 0.7222 | 0.7926 | 0.2041 | 0.4082 |
+
+Interpretation:
+
+- Matched spans successfully break the hand-built rule features.
+- TF-IDF remains perfect, likely because source-boundary prefix wording
+  (`Priority instruction`, `Log message payload`, etc.) is still separable.
+- Next step: run GPT-2/Qwen HF features and residual patching on `matched`, then
+  create a stricter matched profile with more varied source-boundary wording.

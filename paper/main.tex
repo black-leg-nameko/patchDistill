@@ -191,6 +191,11 @@ Stress profile の 160 例から one-pass feature を抽出し，positive 24 例
 HF feature のみの Logistic Regression と，distilled patch feature を加えた Logistic Regression は，どちらも F1 $=1.0$，AUROC $=1.0$ となった．
 この結果も優位性の証拠ではなく，むしろ現行 synthetic data が GPT-2 の one-pass 統計だけで分離できるほど容易であることを示す．
 
+さらに，positive と negative の両方に同一の疑わしい span を含める matched profile を追加した．
+Matched profile の local surrogate 実験では，ルール特徴の F1 は $0.722$，AUROC は $0.787$ まで低下した．
+これは，span 有無や危険語数に依存するショートカットを一定程度抑制できたことを示す．
+ただし TF-IDF は依然として F1 $=1.0$，AUROC $=1.0$ であり，source boundary を示す prefix 語彙が新たなショートカットになっている可能性が高い．
+
 \section{考察}
 初期結果から分かることは，現時点の synthetic データでは表層的手がかりや長さ・span 有無などの副次的手がかりが強く，検出器比較としては不十分であるという点である．
 したがって次段階では，以下の修正が必要である．
