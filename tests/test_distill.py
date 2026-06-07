@@ -1,0 +1,43 @@
+from pathlib import Path
+
+from patchdistill.distill import fit_detector_from_features, fit_proxy_from_files
+from patchdistill.io import write_jsonl
+
+
+def test_fit_proxy_from_mock_files(tmp_path: Path):
+    features = [
+        {"id": "a", "label": 1, "n_tokens": 10, "layer_0_last_norm": 1.0},
+        {"id": "b", "label": 1, "n_tokens": 12, "layer_0_last_norm": 2.0},
+        {"id": "c", "label": 1, "n_tokens": 8, "layer_0_last_norm": 0.5},
+        {"id": "d", "label": 1, "n_tokens": 9, "layer_0_last_norm": 0.7},
+    ]
+    patches = [
+        {"id": row["id"], "patch_signature": {"layer_0_pos_1": {"patch_effect": float(i)}}}
+        for i, row in enumerate(features)
+    ]
+    feature_path = tmp_path / "features.jsonl"
+    patch_path = tmp_path / "patch.jsonl"
+    out = tmp_path / "out"
+    write_jsonl(feature_path, features)
+    write_jsonl(patch_path, patches)
+    metrics = fit_proxy_from_files(feature_path, patch_path, out)
+    assert metrics["n_aligned"] == 4
+    assert (out / "proxy_metrics.json").exists()
+
+
+def test_fit_detector_from_mock_features(tmp_path: Path):
+    features = [
+        {"id": "a", "label": 1, "n_tokens": 10, "layer_0_last_norm": 2.0},
+        {"id": "b", "label": 1, "n_tokens": 12, "layer_0_last_norm": 2.2},
+        {"id": "c", "label": 0, "n_tokens": 8, "layer_0_last_norm": 0.5},
+        {"id": "d", "label": 0, "n_tokens": 9, "layer_0_last_norm": 0.7},
+        {"id": "e", "label": 1, "n_tokens": 11, "layer_0_last_norm": 2.1},
+        {"id": "f", "label": 0, "n_tokens": 7, "layer_0_last_norm": 0.4},
+    ]
+    feature_path = tmp_path / "features.jsonl"
+    out = tmp_path / "detector"
+    write_jsonl(feature_path, features)
+    metrics = fit_detector_from_features(feature_path, out, test_size=0.33)
+    assert metrics["model"] == "hf_features_logreg"
+    assert (out / "detector_metrics.json").exists()
+

@@ -1,0 +1,10 @@
+{
+  "dataset": "data/synthetic_direct_pi.jsonl",
+  "run_dir": "runs/surrogate_mvp",
+  "n_examples": 160,
+  "split": "template",
+  "test_size": 0.25,
+  "random_state": 13,
+  "pseudo_signature_dim": 12
+}
+

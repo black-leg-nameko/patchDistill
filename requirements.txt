@@ -1,0 +1,10 @@
+numpy
+pandas
+scikit-learn
+
+# GPU / Colab experiments
+torch
+transformers
+accelerate
+matplotlib
+

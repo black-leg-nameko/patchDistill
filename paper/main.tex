@@ -1,0 +1,240 @@
+\documentclass[11pt,a4paper]{ltjsarticle}
+
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{booktabs}
+\usepackage{geometry}
+\usepackage{hyperref}
+\usepackage{url}
+\geometry{margin=25mm}
+\hypersetup{
+  colorlinks=true,
+  linkcolor=blue,
+  citecolor=blue,
+  urlcolor=blue
+}
+
+\title{PatchDistill: 蒸留された因果的 Patch Signature に基づく効率的プロンプトインジェクション検出}
+\author{Anonymous}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+大規模言語モデルを組み込んだアプリケーションでは，ユーザー入力や外部文書に含まれる命令が，システム指示や開発者指示よりも優先されるプロンプトインジェクションが重大な脅威となる．
+既存の検出器は，表層的なテキスト特徴，最終出力，あるいは LLM-as-a-Judge に依存することが多く，攻撃成功時にモデル内部でどの制御信号が優先されるのかを因果的に扱うものは限られている．
+本稿では，直接的プロンプトインジェクションを「system instruction 由来の制御信号」から「user-side injected instruction 由来の制御信号」への内部制御シフトとして捉え，activation patching により得られる patch-effect profile を Causal Patch Signature として定義する．
+さらに，高コストな activation patching を推論時に実行するのではなく，offline の教師信号生成に限定し，1 回の forward pass で取得可能な hidden state，attention 統計，logit 統計から patch signature を近似する proxy model へ蒸留する PatchDistill を提案する．
+初期実装では，合成 direct prompt injection データに対して，TF-IDF，ルール特徴，疑似 patch signature を用いた surrogate PatchDistill の比較を行い，実験パイプラインの妥当性を確認した．
+今後，Colab A100 上で Hugging Face モデルを用いた residual stream patching を実行し，真の Causal Patch Signature に基づく proxy error と検出性能を評価する．
+\end{abstract}
+
+\section{はじめに}
+LLM アプリケーションでは，システムプロンプト，開発者指示，ユーザー入力，検索文書，ツール出力など，異なる信頼境界を持つテキストが同一コンテキスト内に連結される．
+この構造は，LLM が命令とデータを厳密には分離しないことに起因するプロンプトインジェクションの温床となる．
+特に直接的プロンプトインジェクションでは，``Ignore previous instructions'' や ``Reveal the system prompt'' のような命令がユーザー入力中に挿入され，モデルが本来のタスクや安全制約を逸脱する．
+
+既存研究は，攻撃・防御の形式化やベンチマーク整備を進めてきた~\cite{liu2023formalizing,toyer2023tensortrust,yi2023bipia}．
+一方で，実用的な検出器の多くは，文字列パターン，分類器，外部 judge，または通常の内部表現 probe に依存する．
+これらは有用であるが，攻撃命令がモデル内部のどの層・token 位置・表現経路を通じて挙動を変化させるのかを直接には測定しない．
+
+本研究の中心仮説は，直接的プロンプトインジェクションの成功時に，モデル内部で system instruction に由来する制御信号が弱まり，user-side injected instruction に由来する制御信号が強まるというものである．
+この制御シフトを観測的特徴だけで説明するのではなく，activation patching による介入で測定する．
+ただし activation patching は，多数の層・head・token 位置に対して追加 forward pass を要するため，オンライン検出には高コストである．
+そこで本稿では，activation patching を offline の因果教師信号生成に限定し，その結果を one-pass feature から近似する proxy model へ蒸留する．
+
+本稿の貢献は以下である．
+\begin{itemize}
+  \item 直接的プロンプトインジェクション検出のための Causal Patch Signature を定義する．
+  \item offline activation patching による高コストな因果信号を，one-pass 内部特徴から近似する Patch Signature Distillation を提案する．
+  \item hidden state probe や attention 統計のみの分類と比較可能な実験パイプラインを実装する．
+  \item 初期合成データにより，データ生成，特徴抽出，proxy 学習，検出器評価，結果収集までの実験基盤を検証する．
+\end{itemize}
+
+\section{関連研究}
+\paragraph{プロンプトインジェクション攻撃と防御}
+Liu らは，LLM 統合アプリケーションにおけるプロンプトインジェクション攻撃を形式化し，複数の攻撃・防御・モデル・タスクを横断するベンチマークを提案した~\cite{liu2023formalizing}．
+Tensor Trust は，人間が作成した多数の prompt extraction および prompt hijacking 例を含むデータセットとベンチマークを提供する~\cite{toyer2023tensortrust}．
+また，RAG や外部文書を介した間接的プロンプトインジェクションについては BIPIA がベンチマークを提示し，外部コンテンツ内の命令を情報として扱うか命令として実行するかの境界問題を示した~\cite{yi2023bipia}．
+本研究は主に direct PI を対象としつつ，最終的には direct/indirect の内部 signature 差分を探索する．
+
+\paragraph{Activation patching と因果的局所化}
+Activation patching は，clean prompt の activation を corrupted prompt の一部 activation に置換し，出力変化を測ることでモデル内部部位の因果寄与を推定する手法である~\cite{zhang2024activationpatching}．
+Zhang and Nanda は，評価 metric や corruption の作り方により patching 結果が変化し得ることを示し，methodological detail の重要性を指摘した~\cite{zhang2024activationpatching}．
+Kramár らは，activation patching の計算コストが model component 数に線形に増える問題を踏まえ，Attribution Patching と AtP* による高速近似を検討した~\cite{kramar2024atpstar}．
+PatchDistill は，patching 自体を高速化するのではなく，高コストな patching 結果を教師信号として蒸留し，推論時には patching を行わない点で異なる．
+
+\paragraph{LLM-as-a-Judge}
+LLM-as-a-Judge は，自由記述出力の評価をスケールさせる実用的手法として広く用いられている．
+Zheng らは，MT-Bench と Chatbot Arena において，強力な LLM judge が人間評価と高い一致を示す一方，position bias，verbosity bias，self-enhancement bias などの限界も持つことを示した~\cite{zheng2023judging}．
+本研究では LLM-as-a-Judge を主検出器ではなく，高リスクまたは不確実な入力に対する Stage 2 の意味論的検証器として位置付ける．
+
+\section{問題設定}
+入力 $x$ は system prompt $S$ と user input $U$ から構成される．
+直接的プロンプトインジェクションでは，$U$ 内に悪意ある命令 span $m$ が含まれる．
+検出器 $D$ は，入力 $x$ に対して
+\[
+D(x) \in \{\mathrm{ALLOW}, \mathrm{BLOCK}, \mathrm{ABSTAIN}\}
+\]
+を返す．
+本稿では，特に見逃しを重視し，false negative rate (FNR) と fixed-FPR 下の recall を主要指標とする．
+
+\section{提案手法}
+\subsection{Causal Patch Signature}
+clean prompt $x^{\mathrm{clean}}$ と injected prompt $x^{\mathrm{inj}}$ のペアを用意する．
+層 $l$，token 位置 $t$ の residual activation を $a_{l,t}$ とする．
+本実装の MVP では head 単位ではなく residual block output 単位で patching を行う．
+すなわち，
+\[
+a^{\mathrm{inj}}_{l,t} \leftarrow a^{\mathrm{clean}}_{l,t'}
+\]
+という介入を行い，安全継続文と攻撃追従継続文の log-probability margin の変化を測る．
+
+安全継続文 $y_{\mathrm{safe}}$ と攻撃追従継続文 $y_{\mathrm{attack}}$ に対し，安全 margin を
+\[
+s(x) =
+\frac{1}{|y_{\mathrm{safe}}|}\log p(y_{\mathrm{safe}}\mid x)
+-
+\frac{1}{|y_{\mathrm{attack}}|}\log p(y_{\mathrm{attack}}\mid x)
+\]
+と定義する．
+patch component $c=(l,t)$ の patch effect は
+\[
+\mathrm{PE}_c(x) = s(x^{\mathrm{inj}};\mathrm{patch}(c)) - s(x^{\mathrm{inj}})
+\]
+である．
+複数 component の patch effect vector
+\[
+\mathrm{PE}(x)=[\mathrm{PE}_{c_1}(x),\ldots,\mathrm{PE}_{c_k}(x)]
+\]
+を Causal Patch Signature と呼ぶ．
+
+\subsection{Patch Signature Distillation}
+Activation patching は高コストであるため，推論時に実行しない．
+代わりに，一回の forward pass で得られる特徴
+\[
+r(x)=[h(x), A(x), L(x)]
+\]
+を抽出する．
+ここで $h(x)$ は hidden-state 統計，$A(x)$ は attention entropy や malicious span attention mass，$L(x)$ は候補 token の log-probability 統計である．
+proxy model $q_{\phi}$ は
+\[
+q_{\phi}(r(x)) \approx \mathrm{PE}(x)
+\]
+を満たすように学習される．
+
+\subsection{One-pass 検出器}
+オンライン検出では，入力 $x$ に対して LLM を一回 forward し，$r(x)$ を得る．
+その後，$\hat{\mathrm{PE}}(x)=q_{\phi}(r(x))$ を推定し，
+\[
+D(x)=C(r(x),\hat{\mathrm{PE}}(x))
+\]
+により軽量分類器 $C$ がリスクスコアを出す．
+低リスクは ALLOW，高リスクは BLOCK，中間帯は ABSTAIN とし，必要に応じて LLM-as-a-Judge に送る．
+
+\section{実装}
+実装は Python パッケージ \texttt{patchdistill} として構成した．
+\texttt{patchdistill.data} は clean/injected/benign-hard の合成 direct PI データを生成する．
+\texttt{patchdistill.hf} は Hugging Face causal LM から hidden state，attention，logit 特徴を抽出する．
+\texttt{patchdistill.patching} は residual block output に対する selected activation patching を実装する．
+\texttt{patchdistill.distill} は HF feature と patch signature から proxy model および検出器を学習する．
+\texttt{patchdistill.reporting} は実験結果 JSON を収集し，Markdown summary を生成する．
+
+\section{実験}
+\subsection{初期合成データ}
+初期実験では，5 種類のタスクテンプレート，6 種類の攻撃テンプレート，6 種類の benign hard prompt テンプレートから 160 件のデータを生成した．
+positive row は direct injection を含む injected prompt，negative row は clean task または benign hard prompt である．
+評価は template split で行い，攻撃テンプレートとタスクテンプレートの単純な暗記を避ける構成にした．
+
+\subsection{比較手法}
+初期実験では以下を比較した．
+\begin{itemize}
+  \item TF-IDF + Logistic Regression
+  \item ルール特徴 + Logistic Regression
+  \item 疑似 patch signature を用いた surrogate PatchDistill
+\end{itemize}
+ここで疑似 patch signature は，実験配線の検証用にルール特徴から決定論的に生成したものであり，因果的証拠ではない．
+真の Causal Patch Signature は Colab A100 上の \texttt{hf-patch} で生成する．
+
+\section{初期結果}
+表~\ref{tab:surrogate-results} に template split における予備結果を示す．
+合成データが単純であるため，ルール特徴と surrogate PatchDistill は完全分類となった．
+この結果は手法の優位性を示すものではなく，データ生成，split，評価，proxy，reporting の実験パイプラインが動作していることを確認するための smoke result である．
+
+\begin{table}[t]
+\centering
+\caption{合成 direct PI データにおける初期 smoke result．}
+\label{tab:surrogate-results}
+\begin{tabular}{lrrrrrr}
+\toprule
+手法 & Accuracy & Precision & Recall & F1 & AUROC & FNR \\
+\midrule
+TF-IDF + LR & 0.875 & 0.826 & 0.950 & 0.884 & 0.963 & 0.050 \\
+Rule features + LR & 1.000 & 1.000 & 1.000 & 1.000 & 1.000 & 0.000 \\
+Surrogate PatchDistill & 1.000 & 1.000 & 1.000 & 1.000 & 1.000 & 0.000 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+疑似 patch signature の proxy prediction error は MAE $=0.0587$，MSE $=0.00934$ であった．
+ただし，これは疑似教師信号に対する結果であり，真の activation patching に基づく $\mathrm{PE}(x)$ の近似可能性を示すものではない．
+
+\section{考察}
+初期結果から分かることは，現時点の synthetic データでは表層的手がかりが強く，検出器比較としては不十分であるという点である．
+したがって次段階では，以下の修正が必要である．
+\begin{enumerate}
+  \item benign hard prompt を増やし，引用，教育，コード，法務文書に含まれる命令表現をより多様化する．
+  \item attack template を train/test で明確に分離し，言い換え，多言語，長文化，adaptive attack を追加する．
+  \item HF モデルで真の patch signature を生成し，proxy error と detector 性能を評価する．
+  \item hidden-state-only probe，attention-stat-only detector，PatchDistill without proxy，PatchDistill full の ablation を行う．
+\end{enumerate}
+
+Colab A100 pilot では，まず GPT-2 または Qwen2.5-0.5B-Instruct を用い，代表層に限定して residual stream patching を行う．
+その後，Qwen2.5-1.5B，Gemma-2-2B へ拡張し，最終的に 7B 級 instruction-tuned model で主評価を行う．
+
+\section{限界}
+本稿の現時点の結果は，合成データと疑似 patch signature に基づく予備実験である．
+したがって，PatchDistill が実際の direct PI や indirect PI に対して汎化すること，あるいは hidden-state probe より優れることはまだ示していない．
+また，現在の patching 実装は residual block output 単位であり，attention head 単位や MLP activation 単位の詳細な causal localization には拡張が必要である．
+さらに，safe/attack continuation の選択により patch effect が変化し得るため，複数 metric による頑健性評価が必要である．
+
+\section{おわりに}
+本稿では，直接的プロンプトインジェクションを内部制御シフトとして捉え，activation patching により得られる Causal Patch Signature を one-pass 検出器へ蒸留する PatchDistill を提案した．
+初期実装では，合成データ生成，one-pass surrogate 特徴，疑似 patch signature，proxy 学習，検出器評価，HF feature extraction，residual patching，結果収集までの実験基盤を構築した．
+今後は Colab A100 上で真の patch signature を収集し，proxy prediction error，OOD robustness，benign hard false positive rate，LLM judge call rate を評価する．
+
+\bibliographystyle{plain}
+\bibliography{references}
+
+\appendix
+\section{再現コマンド}
+ローカル smoke test は以下で実行できる．
+\begin{verbatim}
+python -m patchdistill.cli make-data --n 160 --out data/synthetic_direct_pi.jsonl
+python -m patchdistill.cli run-surrogate \
+  --data data/synthetic_direct_pi.jsonl \
+  --out runs/surrogate_mvp \
+  --split template
+python -m patchdistill.cli collect-results \
+  --runs runs \
+  --out runs/summary.json \
+  --markdown runs/summary.md
+\end{verbatim}
+
+Colab A100 pilot は以下で実行できる．
+\begin{verbatim}
+scripts/run_colab_pilot.sh
+\end{verbatim}
+
+Qwen2.5-0.5B-Instruct を用いる場合は以下のように環境変数を指定する．
+\begin{verbatim}
+MODEL_NAME=Qwen/Qwen2.5-0.5B-Instruct \
+RUN_NAME=qwen25_05b_a100_pilot \
+LAYERS=0,12,23 \
+ATTN_IMPLEMENTATION=eager \
+scripts/run_colab_pilot.sh
+\end{verbatim}
+
+\end{document}
+
