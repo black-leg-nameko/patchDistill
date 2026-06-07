@@ -1,5 +1,13 @@
 # Result Archiving
 
+Current default workflow: do not push Colab results automatically. Run the
+notebook, save it, inspect the printed summaries from Cursor/Codex, then update
+the repository notes and paper manually.
+
+The script below remains available for exceptional cases, but automatic push
+from Colab is easy to break because fine-grained GitHub tokens must have exactly
+the right repository permissions.
+
 Colab outputs under `runs/` are ignored by Git, so use the archive script after
 each experiment. It copies metrics, summaries, predictions, and gzipped JSONL
 feature/patch files into `artifacts/colab_runs/<ARCHIVE_NAME>/`, commits them,

@@ -57,6 +57,11 @@ Install dependencies in Colab:
 pip install -r requirements.txt
 ```
 
+Colab results are reviewed manually by default: run the notebook, save it, then
+inspect the printed `runs/summary.md` from Cursor/Codex. The old automatic
+GitHub push script is still available, but it is not part of the default
+notebook flow.
+
 Generate a small dataset:
 
 ```bash

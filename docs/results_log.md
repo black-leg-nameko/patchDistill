@@ -70,3 +70,46 @@ Interpretation:
   (`Priority instruction`, `Log message payload`, etc.) is still separable.
 - Next step: run GPT-2/Qwen HF features and residual patching on `matched`, then
   create a stricter matched profile with more varied source-boundary wording.
+
+## 2026-06-07 Colab A100 GPT-2 Matched Pilot
+
+Environment visible in the saved notebook output:
+
+- GPU: NVIDIA A100-SXM4-80GB
+- Model: `gpt2`
+- Data profile: `matched`
+- Synthetic examples: 320
+- HF feature examples: 160
+- Residual patch examples: 24
+- Layers: `0,6,11`
+
+Surrogate matched split:
+
+| Method | F1 | AUROC | FNR | FPR |
+| --- | ---: | ---: | ---: | ---: |
+| TF-IDF + Logistic Regression | 1.0000 | 1.0000 | 0.0000 | 0.0000 |
+| Rule features + Logistic Regression | 0.7222 | 0.7868 | 0.2041 | 0.4082 |
+| Surrogate PatchDistill | 0.7222 | 0.7926 | 0.2041 | 0.4082 |
+
+GPT-2 one-pass / patching pilot:
+
+| Component | Result |
+| --- | ---: |
+| `hf-extract` examples | 160 |
+| `hf-patch` examples | 24 |
+| Proxy MAE | 0.0528 |
+| Proxy MSE | 0.01265 |
+| HF features-only detector F1 | 1.0000 |
+| HF features-only detector AUROC | 1.0000 |
+| Distilled patch detector F1 | 1.0000 |
+| Distilled patch detector AUROC | 1.0000 |
+
+Interpretation:
+
+- Matched spans make hand-written rule features fail, as intended.
+- GPT-2 one-pass features still classify perfectly.
+- Since TF-IDF is also perfect, the likely shortcut is no longer just dangerous
+  span presence but the source-boundary/prefix wording that distinguishes active
+  instructions from quoted/logged/training data.
+- The next dataset should randomize or balance boundary wording and include
+  active and data-only examples under overlapping prefixes.

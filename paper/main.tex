@@ -195,6 +195,9 @@ HF feature のみの Logistic Regression と，distilled patch feature を加え
 Matched profile の local surrogate 実験では，ルール特徴の F1 は $0.722$，AUROC は $0.787$ まで低下した．
 これは，span 有無や危険語数に依存するショートカットを一定程度抑制できたことを示す．
 ただし TF-IDF は依然として F1 $=1.0$，AUROC $=1.0$ であり，source boundary を示す prefix 語彙が新たなショートカットになっている可能性が高い．
+GPT-2 を用いた matched profile の Colab A100 pilot では，one-pass feature を 160 例から抽出し，24 例に residual patching を行った．
+Proxy error は MAE $=0.0528$，MSE $=0.01265$ であり，HF feature のみの検出器と distilled patch feature を加えた検出器はいずれも F1 $=1.0$，AUROC $=1.0$ であった．
+このことから，matched profile は手作りルールを崩す一方で，GPT-2 の内部統計や TF-IDF から見える prefix/source-boundary の手がかりはまだ強いと考えられる．
 
 \section{考察}
 初期結果から分かることは，現時点の synthetic データでは表層的手がかりや長さ・span 有無などの副次的手がかりが強く，検出器比較としては不十分であるという点である．
