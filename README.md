@@ -49,6 +49,13 @@ and negative examples:
 scripts/run_matched_surrogate.sh
 ```
 
+For a stricter contrastive split that reuses the same boundary vocabulary with
+opposite negation/order:
+
+```bash
+scripts/run_contrastive_surrogate.sh
+```
+
 ## Colab / GPU Path
 
 Install dependencies in Colab:

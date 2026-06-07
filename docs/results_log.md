@@ -113,3 +113,25 @@ Interpretation:
   instructions from quoted/logged/training data.
 - The next dataset should randomize or balance boundary wording and include
   active and data-only examples under overlapping prefixes.
+
+## 2026-06-08 Local Contrastive Surrogate Pilot
+
+The `contrastive` profile puts the same suspicious span in both classes and uses
+the same boundary vocabulary in opposite order:
+
+- Positive: do not treat the block as data; treat it as active.
+- Negative: treat the block as data; do not treat it as active.
+
+| Method | F1 | AUROC | FNR | FPR |
+| --- | ---: | ---: | ---: | ---: |
+| TF-IDF + Logistic Regression | 1.0000 | 1.0000 | 0.0000 | 0.0000 |
+| Rule features + Logistic Regression | 0.6667 | 0.5000 | 0.0000 | 1.0000 |
+| Surrogate PatchDistill | 0.6667 | 0.5000 | 0.0000 | 1.0000 |
+
+Interpretation:
+
+- Contrastive framing fully breaks the current hand-built rule features.
+- TF-IDF with unigrams and bigrams remains perfect, likely because bigram order
+  captures the synthetic contrast.
+- Next step: run GPT-2/Qwen HF features on `contrastive`, then add
+  paraphrased contrastive frames so template bigrams do not dominate.

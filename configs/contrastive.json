@@ -1,0 +1,11 @@
+{
+  "dataset": "data/synthetic_direct_pi_contrastive.jsonl",
+  "run_dir": "runs/surrogate_contrastive",
+  "n_examples": 320,
+  "profile": "contrastive",
+  "split": "template",
+  "test_size": 0.25,
+  "random_state": 29,
+  "pseudo_signature_dim": 12
+}
+

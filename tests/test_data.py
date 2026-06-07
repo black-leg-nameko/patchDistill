@@ -35,3 +35,15 @@ def test_matched_profile_puts_span_in_both_classes():
     assert all(row["malicious_span"] in row["text"] for row in negatives)
     assert all(row["malicious_span"] in row["text"] for row in positives)
     assert {row["pair_role"] for row in negatives} == {"benign_matched_span"}
+
+
+def test_contrastive_profile_balances_span_and_boundary_words():
+    rows = generate_synthetic_examples(n=40, seed=6, profile="contrastive")
+    labels = {row["label"] for row in rows}
+    assert labels == {0, 1}
+    assert {row["profile"] for row in rows} == {"contrastive"}
+    positives = [row for row in rows if row["label"] == 1]
+    negatives = [row for row in rows if row["label"] == 0]
+    assert all(row["malicious_span"] in row["text"] for row in rows)
+    assert all("do not treat" in row["text"].lower() and "treat it as" in row["text"].lower() for row in rows)
+    assert {row["pair_role"] for row in negatives} == {"benign_contrastive_span"}
