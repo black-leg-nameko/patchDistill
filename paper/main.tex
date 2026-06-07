@@ -158,21 +158,26 @@ positive row は direct injection を含む injected prompt，negative row は c
 真の Causal Patch Signature は Colab A100 上の \texttt{hf-patch} で生成する．
 
 \section{初期結果}
-表~\ref{tab:surrogate-results} に template split における予備結果を示す．
-合成データが単純であるため，ルール特徴と surrogate PatchDistill は完全分類となった．
-この結果は手法の優位性を示すものではなく，データ生成，split，評価，proxy，reporting の実験パイプラインが動作していることを確認するための smoke result である．
+表~\ref{tab:surrogate-results} に MVP profile と stress profile の template split における予備結果を示す．
+Stress profile では，攻撃命令の言い換え，多言語風の override，および疑わしい語を含む benign-hard prompt を追加した．
+その結果，TF-IDF は stress profile で AUROC が $0.568$ まで低下し，false positive rate が $0.591$ まで増加した．
+一方で，ルール特徴と surrogate PatchDistill は依然として完全分類であった．
+したがって，stress profile は表層 n-gram baseline を崩す第一歩にはなったが，まだルール特徴で容易に分離できる．
 
 \begin{table}[t]
 \centering
-\caption{合成 direct PI データにおける初期 smoke result．}
+\caption{合成 direct PI データにおける初期結果．MVP は初期 smoke dataset，stress は言い換え攻撃と benign-hard prompt を増やした dataset である．}
 \label{tab:surrogate-results}
-\begin{tabular}{lrrrrrr}
+\begin{tabular}{llrrrr}
 \toprule
-手法 & Accuracy & Precision & Recall & F1 & AUROC & FNR \\
+Profile & 手法 & F1 & AUROC & FNR & FPR \\
 \midrule
-TF-IDF + LR & 0.875 & 0.826 & 0.950 & 0.884 & 0.963 & 0.050 \\
-Rule features + LR & 1.000 & 1.000 & 1.000 & 1.000 & 1.000 & 0.000 \\
-Surrogate PatchDistill & 1.000 & 1.000 & 1.000 & 1.000 & 1.000 & 0.000 \\
+MVP & TF-IDF + LR & 0.884 & 0.963 & 0.050 & 0.200 \\
+MVP & Rule features + LR & 1.000 & 1.000 & 0.000 & 0.000 \\
+MVP & Surrogate PatchDistill & 1.000 & 1.000 & 0.000 & 0.000 \\
+Stress & TF-IDF + LR & 0.889 & 0.568 & 0.000 & 0.591 \\
+Stress & Rule features + LR & 1.000 & 1.000 & 0.000 & 0.000 \\
+Stress & Surrogate PatchDistill & 1.000 & 1.000 & 0.000 & 0.000 \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -180,13 +185,20 @@ Surrogate PatchDistill & 1.000 & 1.000 & 1.000 & 1.000 & 1.000 & 0.000 \\
 疑似 patch signature の proxy prediction error は MAE $=0.0587$，MSE $=0.00934$ であった．
 ただし，これは疑似教師信号に対する結果であり，真の activation patching に基づく $\mathrm{PE}(x)$ の近似可能性を示すものではない．
 
+Colab A100 上で GPT-2 を用いた初期 pilot も実行した．
+Stress profile の 160 例から one-pass feature を抽出し，positive 24 例に対して residual stream patching を行った．
+このとき proxy model の patch-effect prediction error は MAE $=0.0277$，MSE $=0.00407$ であった．
+HF feature のみの Logistic Regression と，distilled patch feature を加えた Logistic Regression は，どちらも F1 $=1.0$，AUROC $=1.0$ となった．
+この結果も優位性の証拠ではなく，むしろ現行 synthetic data が GPT-2 の one-pass 統計だけで分離できるほど容易であることを示す．
+
 \section{考察}
-初期結果から分かることは，現時点の synthetic データでは表層的手がかりが強く，検出器比較としては不十分であるという点である．
+初期結果から分かることは，現時点の synthetic データでは表層的手がかりや長さ・span 有無などの副次的手がかりが強く，検出器比較としては不十分であるという点である．
 したがって次段階では，以下の修正が必要である．
 \begin{enumerate}
   \item benign hard prompt を増やし，引用，教育，コード，法務文書に含まれる命令表現をより多様化する．
   \item attack template を train/test で明確に分離し，言い換え，多言語，長文化，adaptive attack を追加する．
-  \item HF モデルで真の patch signature を生成し，proxy error と detector 性能を評価する．
+  \item clean/injected の長さ，危険語数，引用符，malicious span 有無に基づくショートカットを抑制する．
+  \item HF モデルで真の patch signature を生成し，proxy error と detector 性能をより難しい split で評価する．
   \item hidden-state-only probe，attention-stat-only detector，PatchDistill without proxy，PatchDistill full の ablation を行う．
 \end{enumerate}
 
@@ -237,4 +249,3 @@ scripts/run_colab_pilot.sh
 \end{verbatim}
 
 \end{document}
-
